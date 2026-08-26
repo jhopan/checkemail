@@ -89,9 +89,9 @@ class CamofoxClient:
         r = requests.get(url, timeout=REQUEST_TIMEOUT, **kwargs)
         return r.json()
 
-    def _post(self, path, data=None):
+    def _post(self, path, data=None, timeout=REQUEST_TIMEOUT):
         url = f"{self.server_url}{path}"
-        r = requests.post(url, json=data, timeout=REQUEST_TIMEOUT)
+        r = requests.post(url, json=data, timeout=timeout)
         return r.json()
 
     def _delete(self, path):
@@ -119,16 +119,61 @@ class CamofoxClient:
         return False
 
     def create_tab(self, url):
-        """Buka tab baru dengan URL tertentu"""
+        """Buka tab baru dengan URL tertentu. Retry sampai tab benar-benar terbentuk."""
         data = {
             "userId": self.user_id,
             "sessionKey": self.session_key,
             "url": url
         }
-        result = self._post("/tabs", data)
+        # Retry sampai 3x kalau tab gagal create
+        for attempt in range(3):
+            try:
+                result = self._post("/tabs", data, timeout=90)
+                if "tabId" in result:
+                    self.tab_id = result["tabId"]
+                    return result
+                # Tab belum terbentuk, mungkin session expired
+                if result.get("code") == "session_expired" or result.get("error", "").find("expired") >= 0:
+                    log(f"  Session expired, buat session baru... (attempt {attempt+1})")
+                    # Hapus session lama, buat baru
+                    try:
+                        self._delete(f"/sessions/{self.user_id}")
+                    except:
+                        pass
+                    self.session_key = f"session_{int(time.time())}_{attempt}"
+                    data["sessionKey"] = self.session_key
+                    time.sleep(2)
+                    continue
+                # Error lain
+                log(f"  Tab creation gagal: {result} (attempt {attempt+1})")
+                time.sleep(3)
+            except requests.exceptions.Timeout:
+                log(f"  Tab creation timeout, retry... (attempt {attempt+1})")
+                time.sleep(3)
+            except Exception as e:
+                log(f"  Tab creation error: {e} (attempt {attempt+1})")
+                time.sleep(3)
+        return {"error": "Tab creation failed after 3 attempts"}
+
+    def ensure_tab(self, url=LOGIN_URL):
+        """Pastikan tab aktif. Kalau tidak ada, buat baru. Kalau ada, verify masih hidup."""
+        if self.tab_id:
+            # Cek apakah tab masih hidup dengan ambil snapshot
+            try:
+                self._get(f"/tabs/{self.tab_id}/snapshot",
+                          params={"userId": self.user_id})
+                return True  # Tab masih hidup
+            except:
+                # Tab sudah mati, reset
+                self.tab_id = None
+
+        # Tab tidak ada, buat baru
+        log(f"  Tab tidak ditemukan, buat tab baru...")
+        result = self.create_tab(url)
         if "tabId" in result:
-            self.tab_id = result["tabId"]
-        return result
+            time.sleep(4)  # Tunggu tab benar-benar siap
+            return True
+        return False
 
     def get_snapshot(self):
         """Ambil snapshot halaman saat ini"""
@@ -285,17 +330,15 @@ def check_account(client, email, password=DEFAULT_PASSWORD):
     }
 
     try:
-        # ── STEP 1: Buka halaman login (hanya jika belum di halaman login) ──
-        # Pakai session yang sama - jangan tutup tab
-        if not client.tab_id:
-            log(f"  Buka halaman login...")
-            client.create_tab(LOGIN_URL)
-            client.wait(4)
-        else:
-            # Sudah ada tab, navigate ke login
-            log(f"  Navigate ke halaman login (session sama)...")
-            client.navigate(LOGIN_URL)
-            client.wait(4)
+        # ── STEP 1: Pastikan tab aktif ──
+        if not client.ensure_tab(LOGIN_URL):
+            result["status"] = "error"
+            result["keterangan"] = "Tidak bisa buka tab di server Camofox"
+            return result
+
+        # Kalau tab sudah ada dan sudah login sebelumnya, navigate ke login
+        # (ensure_tab sudah handle ini)
+        client.wait(4)  # Tunggu halaman login load
 
         # ── STEP 2: Ambil snapshot ──
         log(f"  Ambil snapshot...")

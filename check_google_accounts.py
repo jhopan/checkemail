@@ -285,22 +285,22 @@ def check_account(client, email, password=DEFAULT_PASSWORD):
     }
 
     try:
-        # ── STEP 0: Tutup tab lama jika ada ──
-        if client.tab_id:
-            try:
-                client.close_tab()
-                client.wait(1)
-            except:
-                pass
-
-        # ── STEP 1: Buka halaman login ──
-        log(f"  Buka halaman login...")
-        client.create_tab(LOGIN_URL)
-        client.wait(4)
+        # ── STEP 1: Buka halaman login (hanya jika belum di halaman login) ──
+        # Pakai session yang sama - jangan tutup tab
+        if not client.tab_id:
+            log(f"  Buka halaman login...")
+            client.create_tab(LOGIN_URL)
+            client.wait(4)
+        else:
+            # Sudah ada tab, navigate ke login
+            log(f"  Navigate ke halaman login (session sama)...")
+            client.navigate(LOGIN_URL)
+            client.wait(4)
 
         # ── STEP 2: Ambil snapshot ──
         log(f"  Ambil snapshot...")
         snapshot, url = client.get_full_snapshot()
+        client.wait(3)  # Jeda 3 detik
 
         # ── DETEKSI HALAMAN "Choose an account" ──
         choose_account_signals = ["choose an account", "pilih akun", "use another account", "gunakan akun lain"]
@@ -309,17 +309,19 @@ def check_account(client, email, password=DEFAULT_PASSWORD):
             client.click_js('div:has(> div > a) a, [data-identifier] + * a, a:has-text("Use another account")')
             client.wait(3)
             snapshot, url = client.get_full_snapshot()
+            client.wait(3)  # Jeda 3 detik
 
         # ── STEP 3: Ketik email via JS ──
         log(f"  Ketik email via JS: {email}")
         result_js = client.type_text_js('input[name="identifier"], #identifierId', email)
         log(f"  Hasil ketik: {result_js}")
-        client.wait(1)
+        client.wait(3)  # Jeda 3 detik setelah ketik
 
         # ── STEP 4: Klik Next (email) via JS ──
         log(f"  Klik Next (email) via JS...")
         result_js = client.click_js('#identifierNext')
         log(f"  Hasil klik: {result_js}")
+        client.wait(3)  # Jeda 3 detik setelah klik
 
         # ── STEP 5: Tunggu halaman password/verifikasi muncul ──
         log(f"  Tunggu halaman password muncul...")
@@ -356,6 +358,16 @@ def check_account(client, email, password=DEFAULT_PASSWORD):
                 found_password_page = True
                 log(f"  Password salah terdeteksi! (retry {retry+1})")
                 break
+            # Deteksi "Something went wrong" atau error Google
+            something_wrong_signals = [
+                "something went wrong", "something wrong",
+                "terjadi kesalahan", "coba lagi nanti",
+                "error", "unusual activity", "couldn't complete",
+            ]
+            if any(sig in snapshot_lower for sig in something_wrong_signals):
+                found_error = True
+                log(f"  Something wrong terdeteksi! (retry {retry+1})")
+                break
             client.wait(2)
 
         snapshot_lower = snapshot.lower()
@@ -378,12 +390,13 @@ def check_account(client, email, password=DEFAULT_PASSWORD):
         log(f"  Ketik password via JS...")
         result_js = client.type_text_js('input[name="Passwd"], input[type="password"]', password)
         log(f"  Hasil ketik pwd: {result_js}")
-        client.wait(1)
+        client.wait(3)  # Jeda 3 detik setelah ketik password
 
         # ── STEP 7: Klik Next (password) via JS ──
         log(f"  Klik Next (password) via JS...")
         result_js = client.click_js('#passwordNext')
         log(f"  Hasil klik pwd: {result_js}")
+        client.wait(3)  # Jeda 3 detik setelah klik password Next
 
         # ── STEP 8: Tunggu hasil login ──
         log(f"  Tunggu hasil login...")
@@ -411,7 +424,18 @@ def check_account(client, email, password=DEFAULT_PASSWORD):
             if any(sig in snapshot_lower for sig in wrong_pwd_signals):
                 final_status = "gagal"
                 final_keterangan = "Password salah - sudah diganti dari default"
-                log(f"  Hasil: gagal (retry {retry+1})")
+                log(f"  Hasil: gagal - password salah (retry {retry+1})")
+                break
+            # Deteksi "Something went wrong" atau error Google
+            something_wrong_signals = [
+                "something went wrong", "something wrong",
+                "terjadi kesalahan", "coba lagi nanti",
+                "unusual activity", "couldn't complete",
+            ]
+            if any(sig in snapshot_lower for sig in something_wrong_signals):
+                final_status = "error"
+                final_keterangan = "Google menolak login (something wrong) - coba lagi nanti"
+                log(f"  Hasil: error - something wrong (retry {retry+1})")
                 break
             success_signals = ["favorit", "beranda", "info pribadi", "keamanan & login",
                                "sandi google", "data & privasi", "akun google", "welcome to your", "mentransfer konten"]

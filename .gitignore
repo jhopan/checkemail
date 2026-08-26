@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.env
+hasil_cek*.csv
+hasil_cek*.html
+test_hasil*.csv
+test_hasil*.html
+test2.csv
+students.csv
+students_baru.csv

@@ -141,9 +141,15 @@ class CamofoxClient:
         return self._post(f"/tabs/{self.tab_id}/type", data)
 
     def click(self, ref):
-        """Klik element berdasarkan ref"""
+        """Klik element berdasarkan ref. Ignore timeout karena klik sering berhasil walau response timeout."""
         data = {"userId": self.user_id, "ref": ref}
-        return self._post(f"/tabs/{self.tab_id}/click", data)
+        try:
+            return self._post(f"/tabs/{self.tab_id}/click", data)
+        except requests.exceptions.Timeout:
+            # Click sering berhasil walau response timeout. Return OK anyway.
+            return {"ok": True, "note": "click sent (response timed out but click likely succeeded)"}
+        except Exception as e:
+            return {"error": str(e)}
 
     def evaluate(self, js_code):
         """Jalankan JavaScript di halaman (lebih reliable dari HTTP click)"""
@@ -154,37 +160,42 @@ class CamofoxClient:
             return {"error": "evaluate failed"}
 
     def type_text_js(self, selector, text):
-        """Ketik teks via JavaScript dengan delay per karakter (simulasi human typing)"""
-        # JS: ketik per karakter dengan delay random 50-150ms per huruf
-        # Pakai async IIFE untuk bisa await
+        """Ketik teks via JavaScript dengan native setter + delay per karakter (simulasi human typing)"""
         chars_js = ",".join([repr(c) for c in text])
         js = f"""
         (async () => {{
             const el = document.querySelector('{selector}');
             if (!el) return 'not found';
-            el.value = '';
             el.focus();
+            const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
             const chars = [{chars_js}];
+            let current = '';
             for (const ch of chars) {{
-                el.value += ch;
+                current += ch;
+                nativeSetter.call(el, current);
                 el.dispatchEvent(new Event('input', {{bubbles: true}}));
-                // Delay random 50-150ms per karakter
+                el.dispatchEvent(new Event('change', {{bubbles: true}}));
                 await new Promise(r => setTimeout(r, 50 + Math.random() * 100));
             }}
-            el.dispatchEvent(new Event('change', {{bubbles: true}}));
-            return 'typed ' + chars.length + ' chars';
+            return 'typed ' + chars.length + ' chars, final: ' + el.value.length;
         }})()
         """
         return self.evaluate(js)
 
     def click_js(self, selector):
-        """Klik element via JavaScript (lebih reliable)"""
+        """Klik element via JavaScript dengan PointerEvent + mouse events lengkap"""
         js = f"""
         (() => {{
             const el = document.querySelector('{selector}');
             if (!el) return 'not found';
             const btn = el.querySelector('button') || el;
-            btn.click();
+            // PointerEvent (Google butuh ini untuk bekerja)
+            btn.dispatchEvent(new PointerEvent('pointerdown', {{bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse'}}));
+            btn.dispatchEvent(new PointerEvent('pointerup', {{bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse'}}));
+            // Mouse events
+            btn.dispatchEvent(new MouseEvent('mousedown', {{bubbles: true, cancelable: true}}));
+            btn.dispatchEvent(new MouseEvent('mouseup', {{bubbles: true, cancelable: true}}));
+            btn.dispatchEvent(new MouseEvent('click', {{bubbles: true, cancelable: true}}));
             return 'clicked';
         }})()
         """

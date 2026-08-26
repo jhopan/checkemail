@@ -154,15 +154,25 @@ class CamofoxClient:
             return {"error": "evaluate failed"}
 
     def type_text_js(self, selector, text):
-        """Ketik teks via JavaScript (lebih reliable)"""
+        """Ketik teks via JavaScript dengan delay per karakter (simulasi human typing)"""
+        # JS: ketik per karakter dengan delay random 50-150ms per huruf
+        # Pakai async IIFE untuk bisa await
+        chars_js = ",".join([repr(c) for c in text])
         js = f"""
-        (() => {{
+        (async () => {{
             const el = document.querySelector('{selector}');
             if (!el) return 'not found';
-            el.value = {repr(text)};
-            el.dispatchEvent(new Event('input', {{bubbles: true}}));
+            el.value = '';
+            el.focus();
+            const chars = [{chars_js}];
+            for (const ch of chars) {{
+                el.value += ch;
+                el.dispatchEvent(new Event('input', {{bubbles: true}}));
+                // Delay random 50-150ms per karakter
+                await new Promise(r => setTimeout(r, 50 + Math.random() * 100));
+            }}
             el.dispatchEvent(new Event('change', {{bubbles: true}}));
-            return 'typed';
+            return 'typed ' + chars.length + ' chars';
         }})()
         """
         return self.evaluate(js)

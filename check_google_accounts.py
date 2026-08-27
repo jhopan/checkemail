@@ -346,13 +346,60 @@ def check_account(client, email, password=DEFAULT_PASSWORD):
         client.wait(3)  # Jeda 3 detik
 
         # ── DETEKSI HALAMAN "Choose an account" ──
+        # Jika akun sebelumnya masih login, Google tampilkan halaman pilih akun
         choose_account_signals = ["choose an account", "pilih akun", "use another account", "gunakan akun lain"]
         if any(sig in snapshot.lower() for sig in choose_account_signals):
             log("  Halaman 'Choose an account' - klik 'Use another account' via JS")
-            client.click_js('div:has(> div > a) a, [data-identifier] + * a, a:has-text("Use another account")')
+            # Cari dan klik "Use another account" / "Gunakan akun lain" berdasarkan text
+            client.evaluate("""
+            (() => {
+                const allElements = document.querySelectorAll('div[role="link"], a, button, li');
+                for (const el of allElements) {
+                    const text = el.textContent.trim().toLowerCase();
+                    if (text === 'use another account' || text === 'gunakan akun lain' ||
+                        text.includes('use another account') || text.includes('gunakan akun lain')) {
+                        el.click();
+                        return 'clicked: ' + text.substring(0, 30);
+                    }
+                }
+                return 'not found';
+            })()
+            """)
             client.wait(3)
             snapshot, url = client.get_full_snapshot()
             client.wait(3)  # Jeda 3 detik
+        else:
+            # Cek apakah sudah login (halaman myaccount/google account)
+            # Jika ya, perlu navigate ke accountchooser untuk trigger halaman pilih akun
+            account_signals = ["myaccount.google.com", "akun google", "info pribadi",
+                              "keamanan & login", "sandi google", "data & privasi",
+                              "beranda", "favorit"]
+            if any(sig in snapshot.lower() for sig in account_signals) or "myaccount" in url.lower():
+                log("  Akun sebelumnya masih login - navigate ke accountchooser")
+                client.navigate("https://accounts.google.com/accountchooser?continue=https://accounts.google.com/signin")
+                client.wait(4)
+                snapshot, url = client.get_full_snapshot()
+                client.wait(3)
+                # Sekarang cek lagi apakah halaman pilih akun muncul
+                if any(sig in snapshot.lower() for sig in choose_account_signals):
+                    log("  Halaman 'Choose an account' muncul - klik 'Use another account'")
+                    client.evaluate("""
+                    (() => {
+                        const allElements = document.querySelectorAll('div[role="link"], a, button, li');
+                        for (const el of allElements) {
+                            const text = el.textContent.trim().toLowerCase();
+                            if (text === 'use another account' || text === 'gunakan akun lain' ||
+                                text.includes('use another account') || text.includes('gunakan akun lain')) {
+                                el.click();
+                                return 'clicked: ' + text.substring(0, 30);
+                            }
+                        }
+                        return 'not found';
+                    })()
+                    """)
+                    client.wait(3)
+                    snapshot, url = client.get_full_snapshot()
+                    client.wait(3)
 
         # ── STEP 3: Ketik email via JS ──
         log(f"  Ketik email via JS: {email}")
@@ -525,8 +572,12 @@ def check_account(client, email, password=DEFAULT_PASSWORD):
 def do_logout(client):
     """Logout dari Google dan navigasi ke halaman login berikutnya"""
     try:
+        # Navigasi ke logout URL
         client.navigate(LOGOUT_URL)
-        client.wait(2)
+        client.wait(3)
+        # Lalu navigasi ke halaman login untuk akun berikutnya
+        client.navigate(LOGIN_URL)
+        client.wait(3)
     except:
         pass
 

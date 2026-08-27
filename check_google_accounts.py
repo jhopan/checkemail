@@ -477,7 +477,11 @@ def check_account(client, email, password=DEFAULT_PASSWORD):
         client.wait(3)  # Jeda 3 detik setelah klik
 
         # ── STEP 5: Tunggu halaman password/verifikasi muncul ──
-        log(f"  Tunggu halaman password muncul...")
+        # Beri jeda 5 detik dulu — Google butuh waktu load halaman password/verifikasi
+        log(f"  Tunggu 5 detik untuk halaman password...")
+        client.wait(5)
+
+        log(f"  Cek halaman password...")
         snapshot = ""
         url = ""
         max_retries = 15
@@ -549,10 +553,13 @@ def check_account(client, email, password=DEFAULT_PASSWORD):
         log(f"  Klik Next (password) via JS...")
         result_js = client.click_js('#passwordNext')
         log(f"  Hasil klik pwd: {result_js}")
-        client.wait(3)  # Jeda 3 detik setelah klik password Next
 
         # ── STEP 8: Tunggu hasil login ──
-        log(f"  Tunggu hasil login...")
+        # Beri jeda 5 detik dulu sebelum mulai cek — Google butuh waktu load halaman verifikasi
+        log(f"  Tunggu 5 detik untuk halaman hasil...")
+        client.wait(5)
+
+        log(f"  Cek hasil login...")
         snapshot = ""
         url = ""
         max_retries2 = 15
@@ -564,22 +571,36 @@ def check_account(client, email, password=DEFAULT_PASSWORD):
             snapshot_lower = snapshot.lower()
             url_lower = url.lower()
 
-            verify_signals = ["verify it\u2019s you", "verify it's you", "verifikasi", "open the gmail app",
-                              "google sent a notification", "get a verification code", "use your phone",
-                              "2-step", "two-step", "choose a way to verify", "confirm that it's you",
-                              "challenge", "enter a phone number"]
+            # Cek 1: Verifikasi diperlukan (berbagai jenis)
+            # Google bisa minta: prompt HP, SMS/OTP, kode verifikasi, dll
+            verify_signals = [
+                "verify it\u2019s you", "verify it's you", "verifikasi",
+                "open the gmail app", "google sent a notification",
+                "get a verification code", "use your phone",
+                "2-step", "two-step", "choose a way to verify",
+                "confirm that it's you", "challenge",
+                "enter a phone number", "get a text message",
+                "verification code", "enter the code",
+            ]
             if any(sig in snapshot_lower for sig in verify_signals) or "/challenge" in url_lower:
                 final_status = "verifikasi"
                 final_keterangan = "Akun sudah aman, password sudah di ganti (minta verifikasi)"
                 log(f"  Hasil: verifikasi (retry {retry+1})")
                 break
-            wrong_pwd_signals = ["wrong password", "incorrect password", "your password is incorrect", "password salah"]
+
+            # Cek 2: Password salah
+            wrong_pwd_signals = [
+                "wrong password", "incorrect password",
+                "your password is incorrect", "password salah",
+                "sandi salah",
+            ]
             if any(sig in snapshot_lower for sig in wrong_pwd_signals):
                 final_status = "gagal"
                 final_keterangan = "Password salah - sudah diganti dari default"
                 log(f"  Hasil: gagal - password salah (retry {retry+1})")
                 break
-            # Deteksi "Something went wrong" atau error Google
+
+            # Cek 3: Something went wrong / error Google
             something_wrong_signals = [
                 "something went wrong", "something wrong",
                 "terjadi kesalahan", "coba lagi nanti",
@@ -590,8 +611,13 @@ def check_account(client, email, password=DEFAULT_PASSWORD):
                 final_keterangan = "Google menolak login (something wrong) - coba lagi nanti"
                 log(f"  Hasil: error - something wrong (retry {retry+1})")
                 break
-            success_signals = ["favorit", "beranda", "info pribadi", "keamanan & login",
-                               "sandi google", "data & privasi", "akun google", "welcome to your", "mentransfer konten"]
+
+            # Cek 4: Login berhasil
+            success_signals = [
+                "favorit", "beranda", "info pribadi", "keamanan & login",
+                "sandi google", "data & privasi", "akun google",
+                "welcome to your", "mentransfer konten",
+            ]
             is_success = any(sig in snapshot_lower for sig in success_signals)
             is_success_url = "myaccount" in url_lower
             if is_success or is_success_url:
@@ -606,6 +632,8 @@ def check_account(client, email, password=DEFAULT_PASSWORD):
                 final_keterangan = "Login berhasil, password belum di ubah"
                 log(f"  Hasil: berhasil (retry {retry+1})")
                 break
+
+            # Belum ketemu hasil, tunggu 2 detik
             client.wait(2)
 
         result["status"] = final_status

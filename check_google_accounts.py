@@ -355,32 +355,42 @@ def check_account(client, email, password=DEFAULT_PASSWORD):
             max_click_retries = 5
             for click_attempt in range(max_click_retries):
                 log(f"  Klik 'Use another account' (attempt {click_attempt+1}/{max_click_retries})")
-                # Coba berbagai cara klik
-                client.evaluate("""
-                (() => {
-                    const allElements = document.querySelectorAll('div[role="link"], a, button, li, span');
-                    for (const el of allElements) {
-                        const text = el.textContent.trim().toLowerCase();
-                        if (text === 'use another account' || text === 'gunakan akun lain' ||
-                            text.includes('use another account') || text.includes('gunakan akun lain')) {
-                            // Method 1: PointerEvent
-                            el.dispatchEvent(new PointerEvent('pointerdown', {bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse'}));
-                            el.dispatchEvent(new PointerEvent('pointerup', {bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse'}));
-                            // Method 2: MouseEvent
-                            el.dispatchEvent(new MouseEvent('mousedown', {bubbles: true, cancelable: true}));
-                            el.dispatchEvent(new MouseEvent('mouseup', {bubbles: true, cancelable: true}));
-                            el.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
-                            // Method 3: Native click
-                            el.click();
-                            return 'clicked: ' + text.substring(0, 30);
+                
+                # Method 1: Cari ref dari snapshot, lalu HTTP click (Playwright native - trusted click)
+                another_ref = client.find_ref_by_text(snapshot, "Use another account")
+                if not another_ref:
+                    another_ref = client.find_ref_by_text(snapshot, "Gunakan akun lain")
+                if another_ref:
+                    log(f"  HTTP click ref={another_ref}...")
+                    client.click(another_ref)  # HTTP click, ignore timeout
+                    client.wait(4)
+                    snapshot, url = client.get_full_snapshot()
+                    client.wait(2)
+                else:
+                    # Method 2: JS evaluate sebagai fallback
+                    log(f"  Ref tidak ditemukan, coba JS click...")
+                    client.evaluate("""
+                    (() => {
+                        const allElements = document.querySelectorAll('div[role="link"], a, button, li, span');
+                        for (const el of allElements) {
+                            const text = el.textContent.trim().toLowerCase();
+                            if (text === 'use another account' || text === 'gunakan akun lain' ||
+                                text.includes('use another account') || text.includes('gunakan akun lain')) {
+                                el.dispatchEvent(new PointerEvent('pointerdown', {bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse'}));
+                                el.dispatchEvent(new PointerEvent('pointerup', {bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse'}));
+                                el.dispatchEvent(new MouseEvent('mousedown', {bubbles: true, cancelable: true}));
+                                el.dispatchEvent(new MouseEvent('mouseup', {bubbles: true, cancelable: true}));
+                                el.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
+                                el.click();
+                                return 'clicked: ' + text.substring(0, 30);
+                            }
                         }
-                    }
-                    return 'not found';
-                })()
-                """)
-                client.wait(3)
-                snapshot, url = client.get_full_snapshot()
-                client.wait(2)
+                        return 'not found';
+                    })()
+                    """)
+                    client.wait(4)
+                    snapshot, url = client.get_full_snapshot()
+                    client.wait(2)
 
                 # Cek apakah halaman login sudah muncul (email input ada)
                 if "email or phone" in snapshot.lower() or "email atau nomor" in snapshot.lower():
@@ -389,7 +399,7 @@ def check_account(client, email, password=DEFAULT_PASSWORD):
                 # Masih di halaman choose account, retry
                 log(f"  Masih di halaman choose account, retry...")
             else:
-                # Fallback: navigate langsung ke login URL dengan parameter fresh
+                # Fallback: navigate langsung ke login URL
                 log("  Gagal klik 'Use another account', navigate ke login URL langsung")
                 client.navigate("https://accounts.google.com/signin")
                 client.wait(4)
@@ -397,7 +407,6 @@ def check_account(client, email, password=DEFAULT_PASSWORD):
                 client.wait(3)
         else:
             # Cek apakah sudah login (halaman myaccount/google account)
-            # Jika ya, perlu navigate ke accountchooser untuk trigger halaman pilih akun
             account_signals = ["myaccount.google.com", "akun google", "info pribadi",
                               "keamanan & login", "sandi google", "data & privasi",
                               "beranda", "favorit"]
@@ -407,34 +416,43 @@ def check_account(client, email, password=DEFAULT_PASSWORD):
                 client.wait(4)
                 snapshot, url = client.get_full_snapshot()
                 client.wait(3)
-                # Sekarang cek lagi apakah halaman pilih akun muncul
                 if any(sig in snapshot.lower() for sig in choose_account_signals):
-                    log("  Halaman 'Choose an account' muncul - retry klik 'Use another account'")
+                    log("  Halaman 'Choose an account' muncul - retry klik")
                     max_click_retries = 5
                     for click_attempt in range(max_click_retries):
                         log(f"  Klik 'Use another account' (attempt {click_attempt+1}/{max_click_retries})")
-                        client.evaluate("""
-                        (() => {
-                            const allElements = document.querySelectorAll('div[role="link"], a, button, li, span');
-                            for (const el of allElements) {
-                                const text = el.textContent.trim().toLowerCase();
-                                if (text === 'use another account' || text === 'gunakan akun lain' ||
-                                    text.includes('use another account') || text.includes('gunakan akun lain')) {
-                                    el.dispatchEvent(new PointerEvent('pointerdown', {bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse'}));
-                                    el.dispatchEvent(new PointerEvent('pointerup', {bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse'}));
-                                    el.dispatchEvent(new MouseEvent('mousedown', {bubbles: true, cancelable: true}));
-                                    el.dispatchEvent(new MouseEvent('mouseup', {bubbles: true, cancelable: true}));
-                                    el.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
-                                    el.click();
-                                    return 'clicked: ' + text.substring(0, 30);
+                        another_ref = client.find_ref_by_text(snapshot, "Use another account")
+                        if not another_ref:
+                            another_ref = client.find_ref_by_text(snapshot, "Gunakan akun lain")
+                        if another_ref:
+                            log(f"  HTTP click ref={another_ref}...")
+                            client.click(another_ref)
+                            client.wait(4)
+                            snapshot, url = client.get_full_snapshot()
+                            client.wait(2)
+                        else:
+                            client.evaluate("""
+                            (() => {
+                                const allElements = document.querySelectorAll('div[role="link"], a, button, li, span');
+                                for (const el of allElements) {
+                                    const text = el.textContent.trim().toLowerCase();
+                                    if (text === 'use another account' || text === 'gunakan akun lain' ||
+                                        text.includes('use another account') || text.includes('gunakan akun lain')) {
+                                        el.dispatchEvent(new PointerEvent('pointerdown', {bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse'}));
+                                        el.dispatchEvent(new PointerEvent('pointerup', {bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse'}));
+                                        el.dispatchEvent(new MouseEvent('mousedown', {bubbles: true, cancelable: true}));
+                                        el.dispatchEvent(new MouseEvent('mouseup', {bubbles: true, cancelable: true}));
+                                        el.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
+                                        el.click();
+                                        return 'clicked';
+                                    }
                                 }
-                            }
-                            return 'not found';
-                        })()
-                        """)
-                        client.wait(3)
-                        snapshot, url = client.get_full_snapshot()
-                        client.wait(2)
+                                return 'not found';
+                            })()
+                            """)
+                            client.wait(4)
+                            snapshot, url = client.get_full_snapshot()
+                            client.wait(2)
                         if "email or phone" in snapshot.lower() or "email atau nomor" in snapshot.lower():
                             log(f"  Halaman login muncul! (attempt {click_attempt+1})")
                             break

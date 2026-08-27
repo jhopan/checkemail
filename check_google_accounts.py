@@ -349,25 +349,52 @@ def check_account(client, email, password=DEFAULT_PASSWORD):
         # Jika akun sebelumnya masih login, Google tampilkan halaman pilih akun
         choose_account_signals = ["choose an account", "pilih akun", "use another account", "gunakan akun lain"]
         if any(sig in snapshot.lower() for sig in choose_account_signals):
-            log("  Halaman 'Choose an account' - klik 'Use another account' via JS")
-            # Cari dan klik "Use another account" / "Gunakan akun lain" berdasarkan text
-            client.evaluate("""
-            (() => {
-                const allElements = document.querySelectorAll('div[role="link"], a, button, li');
-                for (const el of allElements) {
-                    const text = el.textContent.trim().toLowerCase();
-                    if (text === 'use another account' || text === 'gunakan akun lain' ||
-                        text.includes('use another account') || text.includes('gunakan akun lain')) {
-                        el.click();
-                        return 'clicked: ' + text.substring(0, 30);
+            log("  Halaman 'Choose an account' terdeteksi")
+
+            # Retry klik "Use another account" sampai halaman login muncul
+            max_click_retries = 5
+            for click_attempt in range(max_click_retries):
+                log(f"  Klik 'Use another account' (attempt {click_attempt+1}/{max_click_retries})")
+                # Coba berbagai cara klik
+                client.evaluate("""
+                (() => {
+                    const allElements = document.querySelectorAll('div[role="link"], a, button, li, span');
+                    for (const el of allElements) {
+                        const text = el.textContent.trim().toLowerCase();
+                        if (text === 'use another account' || text === 'gunakan akun lain' ||
+                            text.includes('use another account') || text.includes('gunakan akun lain')) {
+                            // Method 1: PointerEvent
+                            el.dispatchEvent(new PointerEvent('pointerdown', {bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse'}));
+                            el.dispatchEvent(new PointerEvent('pointerup', {bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse'}));
+                            // Method 2: MouseEvent
+                            el.dispatchEvent(new MouseEvent('mousedown', {bubbles: true, cancelable: true}));
+                            el.dispatchEvent(new MouseEvent('mouseup', {bubbles: true, cancelable: true}));
+                            el.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
+                            // Method 3: Native click
+                            el.click();
+                            return 'clicked: ' + text.substring(0, 30);
+                        }
                     }
-                }
-                return 'not found';
-            })()
-            """)
-            client.wait(3)
-            snapshot, url = client.get_full_snapshot()
-            client.wait(3)  # Jeda 3 detik
+                    return 'not found';
+                })()
+                """)
+                client.wait(3)
+                snapshot, url = client.get_full_snapshot()
+                client.wait(2)
+
+                # Cek apakah halaman login sudah muncul (email input ada)
+                if "email or phone" in snapshot.lower() or "email atau nomor" in snapshot.lower():
+                    log(f"  Halaman login muncul! (attempt {click_attempt+1})")
+                    break
+                # Masih di halaman choose account, retry
+                log(f"  Masih di halaman choose account, retry...")
+            else:
+                # Fallback: navigate langsung ke login URL dengan parameter fresh
+                log("  Gagal klik 'Use another account', navigate ke login URL langsung")
+                client.navigate("https://accounts.google.com/signin")
+                client.wait(4)
+                snapshot, url = client.get_full_snapshot()
+                client.wait(3)
         else:
             # Cek apakah sudah login (halaman myaccount/google account)
             # Jika ya, perlu navigate ke accountchooser untuk trigger halaman pilih akun
@@ -382,24 +409,42 @@ def check_account(client, email, password=DEFAULT_PASSWORD):
                 client.wait(3)
                 # Sekarang cek lagi apakah halaman pilih akun muncul
                 if any(sig in snapshot.lower() for sig in choose_account_signals):
-                    log("  Halaman 'Choose an account' muncul - klik 'Use another account'")
-                    client.evaluate("""
-                    (() => {
-                        const allElements = document.querySelectorAll('div[role="link"], a, button, li');
-                        for (const el of allElements) {
-                            const text = el.textContent.trim().toLowerCase();
-                            if (text === 'use another account' || text === 'gunakan akun lain' ||
-                                text.includes('use another account') || text.includes('gunakan akun lain')) {
-                                el.click();
-                                return 'clicked: ' + text.substring(0, 30);
+                    log("  Halaman 'Choose an account' muncul - retry klik 'Use another account'")
+                    max_click_retries = 5
+                    for click_attempt in range(max_click_retries):
+                        log(f"  Klik 'Use another account' (attempt {click_attempt+1}/{max_click_retries})")
+                        client.evaluate("""
+                        (() => {
+                            const allElements = document.querySelectorAll('div[role="link"], a, button, li, span');
+                            for (const el of allElements) {
+                                const text = el.textContent.trim().toLowerCase();
+                                if (text === 'use another account' || text === 'gunakan akun lain' ||
+                                    text.includes('use another account') || text.includes('gunakan akun lain')) {
+                                    el.dispatchEvent(new PointerEvent('pointerdown', {bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse'}));
+                                    el.dispatchEvent(new PointerEvent('pointerup', {bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse'}));
+                                    el.dispatchEvent(new MouseEvent('mousedown', {bubbles: true, cancelable: true}));
+                                    el.dispatchEvent(new MouseEvent('mouseup', {bubbles: true, cancelable: true}));
+                                    el.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
+                                    el.click();
+                                    return 'clicked: ' + text.substring(0, 30);
+                                }
                             }
-                        }
-                        return 'not found';
-                    })()
-                    """)
-                    client.wait(3)
-                    snapshot, url = client.get_full_snapshot()
-                    client.wait(3)
+                            return 'not found';
+                        })()
+                        """)
+                        client.wait(3)
+                        snapshot, url = client.get_full_snapshot()
+                        client.wait(2)
+                        if "email or phone" in snapshot.lower() or "email atau nomor" in snapshot.lower():
+                            log(f"  Halaman login muncul! (attempt {click_attempt+1})")
+                            break
+                        log(f"  Masih di halaman choose account, retry...")
+                    else:
+                        log("  Gagal klik, navigate ke login URL langsung")
+                        client.navigate("https://accounts.google.com/signin")
+                        client.wait(4)
+                        snapshot, url = client.get_full_snapshot()
+                        client.wait(3)
 
         # ── STEP 3: Ketik email via JS ──
         log(f"  Ketik email via JS: {email}")

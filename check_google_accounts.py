@@ -874,6 +874,8 @@ PRASYARAT:
                         help='Mulai dengan session kosong (hapus cookies sebelum mulai)')
     parser.add_argument('--append', action='store_true',
                         help='Tambah hasil ke file output yang sudah ada (tanpa hapus data lama)')
+    parser.add_argument('--pause', action='store_true',
+                        help='Tunggu Enter setelah tiap akun (untuk cek manual sebelum lanjut)')
     args = parser.parse_args()
 
     # ── Validasi file CSV ──
@@ -997,6 +999,15 @@ PRASYARAT:
 
         # Logout
         do_logout(client)
+
+        # ── Pause: tunggu Enter kalau berhasil login (untuk cek manual) ──
+        if args.pause and result['status'] == 'berhasil':
+            print(f"\n  ⏸️  Akun BERHASIL login. Tekan Enter untuk lanjut ke akun berikutnya...")
+            try:
+                input()
+            except KeyboardInterrupt:
+                print("\n  Dihentikan pengguna.")
+                break
 
         # Delay
         if i < len(students):

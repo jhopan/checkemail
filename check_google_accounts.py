@@ -1000,14 +1000,23 @@ PRASYARAT:
         # Logout
         do_logout(client)
 
-        # ── Pause: tunggu Enter kalau berhasil login (untuk cek manual) ──
-        if args.pause and result['status'] == 'berhasil':
-            print(f"\n  ⏸️  Akun BERHASIL login. Tekan Enter untuk lanjut ke akun berikutnya...")
+        # ── Pause + Beep: kalau berhasil login, bunyi beep lalu tunggu Enter ──
+        if result['status'] == 'berhasil':
+            # Bunyi beep (frekuensi 1000Hz, 500ms)
             try:
-                input()
-            except KeyboardInterrupt:
-                print("\n  Dihentikan pengguna.")
-                break
+                import winsound
+                winsound.Beep(1000, 500)
+            except:
+                pass
+            # Kalau --pause, tunggu Enter
+            if args.pause:
+                print(f"\n  🔔 BERHASIL login! Bunyi beep sudah dibunyikan.")
+                print(f"  Tekan Enter untuk lanjut ke akun berikutnya...")
+                try:
+                    input()
+                except KeyboardInterrupt:
+                    print("\n  Dihentikan pengguna.")
+                    break
 
         # Delay
         if i < len(students):

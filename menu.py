@@ -209,36 +209,39 @@ def start_checker(cfg):
         print(f"  {i:>3}. {ident:<15} | {nama:<25} | {s['email']:<40} | pwd: {pwd}")
     print("-" * 75)
 
-    # Tanya mau cek berapa akun (dari atas)
-    limit_str = input(f"Mau cek berapa akun? (Enter = semua {total}): ").strip()
+    # Mulai dari akun ke-N (dihitung dari list asli, index 1-based)
+    start_str = input(f"Mulai dari akun ke-? (Enter = 1): ").strip()
+    start = 1
+    if start_str:
+        try:
+            start = int(start_str)
+            if start < 1:
+                start = 1
+            if start > total:
+                print(f"❌ Melebihi total akun ({total})")
+                return
+        except ValueError:
+            print("❌ Bukan angka, mulai dari 1")
+            start = 1
+
+    # Mau cek berapa akun (dari posisi start)
+    sisa = total - start + 1
+    limit_str = input(f"Mau cek berapa akun? (Enter = sisa {sisa}): ").strip()
+    limit = sisa
     if limit_str:
         try:
             limit = int(limit_str)
             if limit < 1:
                 print("❌ Harus angka >= 1")
                 return
-            if limit > total:
-                print(f"⚠️  Melebihi total ({total}), pakai semua {total} akun")
-                limit = total
-            accounts = accounts[:limit]
+            if limit > sisa:
+                print(f"⚠️  Melebihi sisa ({sisa}), pakai semua sisa")
+                limit = sisa
         except ValueError:
-            print("❌ Harus angka, pakai semua akun")
+            print("❌ Harus angka, pakai sisa akun")
 
-    # Pilihan mulai dari akun ke-N (skip yang sudah dicek sebelumnya)
-    start_str = input(f"Mulai dari akun ke-? (Enter = 1): ").strip()
-    if start_str:
-        try:
-            start = int(start_str)
-            if start < 1:
-                start = 1
-            if start > len(accounts):
-                print(f"❌ Melebihi jumlah akun ({len(accounts)})")
-                return
-            accounts = accounts[start - 1:]
-        except ValueError:
-            print("❌ Bukan angka, mulai dari 1")
-
-    print(f"✅ Akan mengecek {len(accounts)} akun")
+    accounts = accounts[start - 1 : start - 1 + limit]
+    print(f"✅ Akan mengecek {len(accounts)} akun (#{start} s/d #{start - 1 + len(accounts)})")
 
     run_checker(
         accounts=accounts,

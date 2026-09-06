@@ -1,6 +1,0 @@
-# Format universal: email,password
-# Baris dengan password = pakai password itu
-# Baris tanpa password = pakai --password dari command line
-budi@gmail.com,password123
-siti@yahoo.com
-2305541113,Gede Davananda Wicaksana

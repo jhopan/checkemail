@@ -12,7 +12,9 @@ from checker import (
     check_account,
     do_logout,
     beep_success,
-    load_accounts,
+    load_gmail_accounts,
+    load_unud_accounts,
+    load_accounts_auto,
     generate_report,
     generate_html_report,
     DEFAULT_PASSWORD,
@@ -21,19 +23,13 @@ from checker import (
 )
 
 
-def run_checker(csv_file, output="hasil_cek.csv", html_file=None,
+def run_checker(accounts, csv_file, output="hasil_cek.csv", html_file=None,
                 password=DEFAULT_PASSWORD, delay=DELAY_BETWEEN_ACCOUNTS,
                 fresh=False, pause=True, append=False):
-    """Jalankan proses cek akun. Dipanggil dari menu.py atau CLI."""
-    # ── Validasi file ──
-    if not os.path.exists(csv_file):
-        print(f"❌ File tidak ditemukan: {csv_file}")
-        return
-
-    # ── Baca akun ──
-    accounts = load_accounts(csv_file, default_password=password)
+    """Jalankan proses cek akun. accounts = list dari loaders.
+    Dipanggil dari menu.py atau CLI."""
     if not accounts:
-        print("Tidak ada akun di file. Pastikan format benar.")
+        print("Tidak ada akun. Pastikan file CSV benar.")
         return
 
     mode = 'UNUD (auto-generate)' if accounts[0]['nim'] else 'UNIVERSAL (email langsung)'
@@ -164,8 +160,10 @@ def cli():
 
     parser = argparse.ArgumentParser(
         description="Cek login akun Google via Camofox HTTP API")
-    parser.add_argument('--csv', default='accounts.csv',
-                        help='File CSV akun (default: accounts.csv)')
+    parser.add_argument('--mode', choices=['gmail', 'unud', 'auto'], default='auto',
+                        help='Mode loader: gmail, unud, atau auto-detect (default: auto)')
+    parser.add_argument('--csv', default=None,
+                        help='File CSV akun (default: gmail_accounts.csv / unud_accounts.csv)')
     parser.add_argument('--output', default='hasil_cek.csv',
                         help='File output laporan (default: hasil_cek.csv)')
     parser.add_argument('--html', default=None,
@@ -182,12 +180,22 @@ def cli():
                         help='Tambah hasil ke file output yang sudah ada')
     parser.add_argument('--pause', action='store_true',
                         help='Tunggu Enter setelah akun BERHASIL login')
-    parser.add_argument('--yes', '-y', action='store_true',
-                        help='Skip konfirmasi (belum dipakai, reserved)')
     args = parser.parse_args()
 
+    # Pilih loader sesuai mode
+    if args.mode == 'gmail' or (args.mode == 'auto' and args.csv):
+        csv_file = args.csv or 'gmail_accounts.csv'
+        accounts = load_gmail_accounts(csv_file, args.password)
+    elif args.mode == 'unud':
+        csv_file = args.csv or 'unud_accounts.csv'
+        accounts = load_unud_accounts(csv_file, args.password)
+    else:
+        csv_file = args.csv or 'accounts.csv'
+        accounts = load_accounts_auto(csv_file, args.password)
+
     run_checker(
-        csv_file=args.csv,
+        accounts=accounts,
+        csv_file=csv_file,
         output=args.output,
         html_file=args.html,
         password=args.password,

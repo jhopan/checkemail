@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Menu utama Email Account Checker.
-Atur semua pengaturan di sini: password, server browser, CSV, dll.
+Atur semua pengaturan: password, server browser, mode (Gmail/UNUD), dll.
 
 Jalankan: python menu.py
 """
@@ -9,7 +9,6 @@ Jalankan: python menu.py
 import os
 import sys
 import json
-import webbrowser
 import subprocess
 
 from checker import (
@@ -17,6 +16,10 @@ from checker import (
     DEFAULT_PASSWORD,
     DEFAULT_SERVER_URL,
     DELAY_BETWEEN_ACCOUNTS,
+    load_gmail_accounts,
+    load_unud_accounts,
+    load_accounts_auto,
+    detect_mode,
 )
 
 CONFIG_FILE = "config.json"
@@ -32,9 +35,11 @@ def load_config():
             pass
     # Default
     return {
+        "mode": "unud",              # 'gmail' atau 'unud'
+        "gmail_csv": "gmail_accounts.csv",
+        "unud_csv": "unud_accounts.csv",
         "password": DEFAULT_PASSWORD,
         "server_url": DEFAULT_SERVER_URL,
-        "csv_file": "accounts.csv",
         "output_file": "hasil_cek.csv",
         "html_file": "hasil_cek.html",
         "delay": DELAY_BETWEEN_ACCOUNTS,
@@ -42,7 +47,6 @@ def load_config():
         "pause": True,
         "append": False,
         "html": True,
-        "yes": True,
     }
 
 
@@ -51,19 +55,34 @@ def save_config(cfg):
         json.dump(cfg, f, indent=2)
 
 
+def get_csv_file(cfg):
+    """Ambil file CSV sesuai mode aktif."""
+    return cfg['gmail_csv'] if cfg['mode'] == 'gmail' else cfg['unud_csv']
+
+
+def load_for_mode(cfg):
+    """Load akun pakai loader sesuai mode aktif."""
+    csv_file = get_csv_file(cfg)
+    if cfg['mode'] == 'gmail':
+        return load_gmail_accounts(csv_file, cfg['password']), csv_file
+    return load_unud_accounts(csv_file, cfg['password']), csv_file
+
+
 def show_config(cfg):
     print("\n" + "-" * 50)
     print("  PENGATURAN SAAT INI:")
     print("-" * 50)
+    print(f"  Mode aktif             : {cfg['mode'].upper()}")
     print(f"  1. Password default    : {cfg['password']}")
     print(f"  2. Server browser      : {cfg['server_url']}")
-    print(f"  3. File CSV akun       : {cfg['csv_file']}")
-    print(f"  4. File output CSV     : {cfg['output_file']}")
-    print(f"  5. File output HTML    : {'aktif' if cfg['html'] else 'nonaktif'} ({cfg['html_file']})")
-    print(f"  6. Delay antar akun    : {cfg['delay']} detik")
-    print(f"  7. Fresh session       : {'YA' if cfg['fresh'] else 'TIDAK'}")
-    print(f"  8. Pause @ berhasil    : {'YA' if cfg['pause'] else 'TIDAK'}")
-    print(f"  9. Append (gak overwrite): {'YA' if cfg['append'] else 'TIDAK'}")
+    print(f"  3. File CSV (Gmail)    : {cfg['gmail_csv']}")
+    print(f"  4. File CSV (UNUD)     : {cfg['unud_csv']}")
+    print(f"  5. File output CSV     : {cfg['output_file']}")
+    print(f"  6. HTML report         : {'aktif' if cfg['html'] else 'nonaktif'} ({cfg['html_file']})")
+    print(f"  7. Delay antar akun    : {cfg['delay']} detik")
+    print(f"  8. Fresh session       : {'YA' if cfg['fresh'] else 'TIDAK'}")
+    print(f"  9. Pause @ berhasil    : {'YA' if cfg['pause'] else 'TIDAK'}")
+    print(f"  10. Append             : {'YA' if cfg['append'] else 'TIDAK'}")
     print("-" * 50)
 
 
@@ -73,14 +92,19 @@ def settings_menu(cfg):
         show_config(cfg)
         print("""
 --- UBAH PENGATURAN ---
-  0. Kembali ke menu utama
+  0. Kembali (simpan otomatis)
+  m. Ganti mode (gmail <-> unud)
   Pilih nomor yang mau diubah:""")
-        choice = input("> ").strip()
+        choice = input("> ").strip().lower()
 
         if choice == '0':
             save_config(cfg)
             print("✅ Pengaturan tersimpan.")
             return
+
+        elif choice == 'm':
+            cfg['mode'] = 'unud' if cfg['mode'] == 'gmail' else 'gmail'
+            print(f"✅ Mode sekarang: {cfg['mode'].upper()}")
 
         elif choice == '1':
             cfg['password'] = input("Password default baru: ").strip() or cfg['password']
@@ -89,34 +113,41 @@ def settings_menu(cfg):
             cfg['server_url'] = input("URL server browser: ").strip() or cfg['server_url']
 
         elif choice == '3':
-            csv_file = input("File CSV akun: ").strip()
-            if csv_file and os.path.exists(csv_file):
-                cfg['csv_file'] = csv_file
+            val = input("File CSV Gmail: ").strip()
+            if val and os.path.exists(val):
+                cfg['gmail_csv'] = val
             else:
-                print(f"❌ File tidak ada: {csv_file}")
+                print(f"❌ File tidak ada: {val}")
 
         elif choice == '4':
-            cfg['output_file'] = input("File output CSV: ").strip() or cfg['output_file']
+            val = input("File CSV UNUD: ").strip()
+            if val and os.path.exists(val):
+                cfg['unud_csv'] = val
+            else:
+                print(f"❌ File tidak ada: {val}")
 
         elif choice == '5':
+            cfg['output_file'] = input("File output CSV: ").strip() or cfg['output_file']
+
+        elif choice == '6':
             cfg['html'] = not cfg['html']
             print(f"HTML report: {'AKTIF' if cfg['html'] else 'NONAKTIF'}")
 
-        elif choice == '6':
+        elif choice == '7':
             try:
                 cfg['delay'] = int(input("Delay (detik): ").strip() or cfg['delay'])
             except ValueError:
                 print("❌ Harus angka")
 
-        elif choice == '7':
+        elif choice == '8':
             cfg['fresh'] = not cfg['fresh']
             print(f"Fresh session: {'YA' if cfg['fresh'] else 'TIDAK'}")
 
-        elif choice == '8':
+        elif choice == '9':
             cfg['pause'] = not cfg['pause']
             print(f"Pause @ berhasil: {'YA' if cfg['pause'] else 'TIDAK'}")
 
-        elif choice == '9':
+        elif choice == '10':
             cfg['append'] = not cfg['append']
             print(f"Append: {'YA' if cfg['append'] else 'TIDAK'}")
 
@@ -151,20 +182,25 @@ def open_browser_folder():
 
 def open_output_folder():
     """Buka folder hasil di explorer."""
-    path = os.path.abspath('.')
-    subprocess.Popen(['explorer', path])
+    subprocess.Popen(['explorer', os.path.abspath('.')])
     print("✅ Folder dibuka di Explorer")
 
 
 def start_checker(cfg):
-    """Jalankan proses cek akun."""
-    from check import run_checker  # import runner dari check.py
+    """Jalankan proses cek akun sesuai mode aktif."""
+    from check import run_checker
 
     if not check_server_status(cfg):
         return
 
+    accounts, csv_file = load_for_mode(cfg)
+    if not accounts:
+        print(f"❌ Tidak ada akun di {csv_file}")
+        return
+
     run_checker(
-        csv_file=cfg['csv_file'],
+        accounts=accounts,
+        csv_file=csv_file,
         output=cfg['output_file'],
         html_file=cfg['html_file'] if cfg['html'] else None,
         password=cfg['password'],
@@ -176,22 +212,22 @@ def start_checker(cfg):
 
 
 def preview_csv(cfg):
-    """Lihat isi file CSV."""
-    if not os.path.exists(cfg['csv_file']):
-        print(f"❌ File tidak ada: {cfg['csv_file']}")
+    """Lihat isi file CSV sesuai mode."""
+    accounts, csv_file = load_for_mode(cfg)
+    if not os.path.exists(csv_file):
+        print(f"❌ File tidak ada: {csv_file}")
         return
-    from checker import load_accounts
-    accounts = load_accounts(cfg['csv_file'], cfg['password'])
-    mode = 'UNUD' if accounts and accounts[0]['nim'] else 'UNIVERSAL'
-    print(f"\nMode terdeteksi: {mode}")
-    print(f"Total akun: {len(accounts)}")
-    print("-" * 70)
+    if not accounts:
+        print(f"❌ Tidak ada akun di {csv_file}")
+        return
+    print(f"\nFile: {csv_file} | Mode: {cfg['mode'].upper()} | Total: {len(accounts)}")
+    print("-" * 75)
     for i, s in enumerate(accounts, 1):
         ident = s['nim'] or '-'
         nama = s['nama'][:25] or '-'
         pwd = '*' * len(s['password']) if s['password'] else '-'
         print(f"  {i:>3}. {ident:<15} | {nama:<25} | {s['email']:<40} | pwd: {pwd}")
-    print("-" * 70)
+    print("-" * 75)
 
 
 def main():
@@ -202,11 +238,13 @@ def main():
         print("=" * 50)
         print("   EMAIL ACCOUNT CHECKER - MENU UTAMA")
         print("=" * 50)
+        print(f"   Mode aktif: {cfg['mode'].upper()}")
+        print("=" * 50)
         print("""
   1. MULAI CEK AKUN
-  2. Pengaturan (password, server, dll)
+  2. Pengaturan (mode, password, server, dll)
   3. Lihat pengaturan saat ini
-  4. Preview file CSV
+  4. Preview file CSV (mode aktif)
   5. Cek status server browser
   6. Buka folder camofox-browser
   7. Buka folder hasil

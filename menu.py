@@ -199,6 +199,40 @@ def start_checker(cfg):
         print(f"❌ Tidak ada akun di {csv_file}")
         return
 
+    total = len(accounts)
+    print(f"\nTotal akun di {csv_file}: {total}")
+
+    # Tanya mau cek berapa akun (dari atas)
+    limit_str = input(f"Mau cek berapa akun? (Enter = semua {total}): ").strip()
+    if limit_str:
+        try:
+            limit = int(limit_str)
+            if limit < 1:
+                print("❌ Harus angka >= 1")
+                return
+            if limit > total:
+                print(f"⚠️  Melebihi total ({total}), pakai semua {total} akun")
+                limit = total
+            accounts = accounts[:limit]
+        except ValueError:
+            print("❌ Harus angka, pakai semua akun")
+
+    # Pilihan mulai dari akun ke-N (skip yang sudah dicek sebelumnya)
+    start_str = input(f"Mulai dari akun ke-? (Enter = 1): ").strip()
+    if start_str:
+        try:
+            start = int(start_str)
+            if start < 1:
+                start = 1
+            if start > len(accounts):
+                print(f"❌ Melebihi jumlah akun ({len(accounts)})")
+                return
+            accounts = accounts[start - 1:]
+        except ValueError:
+            print("❌ Bukan angka, mulai dari 1")
+
+    print(f"✅ Akan mengecek {len(accounts)} akun")
+
     run_checker(
         accounts=accounts,
         csv_file=csv_file,

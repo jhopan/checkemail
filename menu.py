@@ -200,7 +200,14 @@ def start_checker(cfg):
         return
 
     total = len(accounts)
-    print(f"\nTotal akun di {csv_file}: {total}")
+    print(f"\nFile: {csv_file} | Mode: {cfg['mode'].upper()} | Total: {total}")
+    print("-" * 75)
+    for i, s in enumerate(accounts, 1):
+        ident = s['nim'] or '-'
+        nama = s['nama'][:25] or '-'
+        pwd = '*' * len(s['password']) if s['password'] else '-'
+        print(f"  {i:>3}. {ident:<15} | {nama:<25} | {s['email']:<40} | pwd: {pwd}")
+    print("-" * 75)
 
     # Tanya mau cek berapa akun (dari atas)
     limit_str = input(f"Mau cek berapa akun? (Enter = semua {total}): ").strip()

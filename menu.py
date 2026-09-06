@@ -26,15 +26,8 @@ CONFIG_FILE = "config.json"
 
 
 def load_config():
-    """Baca config tersimpan. Return dict."""
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, 'r') as f:
-                return json.load(f)
-        except Exception:
-            pass
-    # Default
-    return {
+    """Baca config tersimpan. Return dict (merge dengan default)."""
+    cfg = {
         "mode": "unud",              # 'gmail' atau 'unud'
         "gmail_csv": "gmail_accounts.csv",
         "unud_csv": "unud_accounts.csv",
@@ -48,6 +41,14 @@ def load_config():
         "append": False,
         "html": True,
     }
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                saved = json.load(f)
+            cfg.update({k: v for k, v in saved.items() if v is not None})
+        except Exception:
+            pass
+    return cfg
 
 
 def save_config(cfg):

@@ -1,7 +1,9 @@
 {
+  "mode": "unud",
+  "gmail_csv": "gmail_accounts.csv",
+  "unud_csv": "unud_accounts.csv",
   "password": "unud2023",
   "server_url": "http://localhost:9377",
-  "csv_file": "accounts.csv",
   "output_file": "hasil_cek.csv",
   "html_file": "hasil_cek.html",
   "delay": 3,
@@ -9,5 +11,6 @@
   "pause": true,
   "append": false,
   "html": true,
+  "csv_file": "accounts.csv",
   "yes": true
 }

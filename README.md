@@ -1,147 +1,104 @@
-# Google Account Checker - Uji Login Akun Google Mahasiswa
+# Email Account Checker
 
-Script Python untuk mengecek login akun Google mahasiswa secara batch (banyak akun sekaligus). Script ini menggunakan Playwright untuk automasi browser.
+Uji login akun Google secara batch via Camoufox HTTP API (anti-detect browser).
 
-## 📦 Instalasi
+## Struktur (Modular)
 
-### 1. Install Python 3.8+
-Pastikan Python sudah terinstall di komputer Anda.
+```
+checker email/
+├── checker/                 # Package modular
+│   ├── __init__.py          # Public API
+│   ├── config.py            # Konstanta & deteksi signals
+│   ├── client.py            # Camofox HTTP API client
+│   ├── engine.py            # Logic cek login
+│   ├── loaders.py           # Baca CSV (auto-detect 3 format)
+│   └── reporter.py          # Output console/CSV/HTML
+├── check.py                 # Entry point CLI
+├── accounts.csv             # Contoh CSV universal
+└── students.csv             # Contoh CSV mode UNUD
+```
 
-### 2. Install dependencies
+## Format CSV (Auto-Detect)
+
+| Format | Keterangan |
+|--------|------------|
+| `email,password` | Universal — password spesifik per akun |
+| `email` | Universal — pakai `--password` |
+| `nim,nama` | Mode UNUD — email auto-generate + password default |
+
+Contoh `accounts.csv`:
+```
+budi@gmail.com,password123
+siti@yahoo.com
+2305541113,Gede Davananda Wicaksana
+```
+
+- Delimiter auto-detect: koma (`,`) atau titik koma (`;`)
+- Baris `#` = komentar, di-skip
+
+## Cara Pakai
+
 ```bash
-cd google-account-checker
-pip install -r requirements.txt
+# 1. Jalankan server Camofox
+cd C:\Users\ACER\camofox-browser
+npm start
+
+# 2. Jalankan checker
+cd "C:\Users\ACER\Documents\Project\checker email"
+python check.py --csv accounts.csv --yes
 ```
 
-### 3. Install browser Playwright
-```bash
-playwright install chromium
+## Opsi
+
+| Opsi | Keterangan |
+|------|------------|
+| `--csv FILE` | File CSV akun (default: `accounts.csv`) |
+| `--output FILE` | Output laporan CSV (default: `hasil_cek.csv`) |
+| `--html FILE` | Output laporan HTML (opsional) |
+| `--password PWD` | Password default (default: `unud2023`) |
+| `--delay N` | Jeda antar akun (default: 3 detik) |
+| `--yes, -y` | Skip konfirmasi, langsung jalan |
+| `--server-url URL` | URL server Camofox (default: `http://localhost:9377`) |
+| `--fresh` | Mulai dengan session kosong |
+| `--append` | Tambah hasil ke file yang ada |
+| `--pause` | Tunggu Enter setelah akun BERHASIL login |
+
+## Status Hasil
+
+| Status | Arti |
+|--------|------|
+| `berhasil` | Login sukses — password masih default |
+| `verifikasi` | Google minta verifikasi — password sudah diganti (aman) |
+| `gagal` | Email tidak ditemukan / password salah |
+| `error` | Something wrong / server error |
+| `unknown` | Status tidak diketahui — cek manual |
+
+Saat akun `berhasil`, script **bunyi beep** (Windows) + pause jika pakai `--pause`.
+
+## Penggunaan sebagai Library
+
+```python
+from checker import (
+    CamofoxClient, check_account, load_accounts,
+    generate_report, beep_success,
+)
+
+accounts = load_accounts('accounts.csv')
+client = CamofoxClient('http://localhost:9377')
+
+for acc in accounts:
+    result = check_account(client, acc['email'], acc['password'])
+    print(result['status'], result['email'])
+    if result['status'] == 'berhasil':
+        beep_success()
 ```
 
-## 📁 Struktur File
+## Fitur
 
-```
-google-account-checker/
-├── check_google_accounts.py   # Script utama
-├── students.csv              # Data mahasiswa (EDIT INI)
-├── requirements.txt          # Dependencies
-├── README.md                 # Petunjuk ini
-├── hasil_cek.csv             # Output laporan (otomatis)
-└── hasil_cek.html            # Output laporan HTML (opsional)
-```
-
-## 📝 Format File CSV
-
-File `students.csv` harus memiliki header berikut:
-```
-nim,nama,alamat,nohp,status
-```
-
-Contoh isi:
-```csv
-nim,nama,alamat,nohp,status
-2305541126,Putu Gede Ananda Krishna Dipayana,Jl. Raya Tuban No. 99X,085958922425,Non-aktif
-2305541127,I Made Krishna Mahayana,Jl. Pertulaka No. 15,081999587658,Aktif
-```
-
-Email akan **otomatis di-generate** dari nama belakang + NIM:
-- `Putu Gede Ananda Krishna Dipayana` + `2305541126` → `dipayana.2305541126@student.unud.ac.id`
-
-## 🚀 Cara Pakai
-
-### Cara dasar:
-```bash
-python check_google_accounts.py
-```
-Script akan membaca `students.csv`, cek semua akun, dan simpan hasil ke `hasil_cek.csv`.
-
-### Opsi lengkap:
-```bash
-python check_google_accounts.py --csv students.csv --output hasil_cek.csv --html hasil_cek.html --headless --delay 5
-```
-
-### Parameter:
-| Parameter | Default | Keterangan |
-|-----------|---------|------------|
-| `--csv` | `students.csv` | Path file CSV data mahasiswa |
-| `--output` | `hasil_cek.csv` | Path file output laporan CSV |
-| `--html` | (none) | Path file output laporan HTML (opsional) |
-| `--password` | `unud2023` | Password default untuk login |
-| `--headless` | (off) | Jalankan browser tanpa GUI (lebih cepat) |
-| `--delay` | `3` | Jeda antar akun dalam detik |
-| `--no-logout` | (off) | Jangan logout setelah cek (untuk debug) |
-
-### Contoh kasus:
-
-**Cek dengan password baru:**
-```bash
-python check_google_accounts.py --password unud2024
-```
-
-**Cek mode headless (tanpa tampilan browser):**
-```bash
-python check_google_accounts.py --headless
-```
-
-**Cek dengan laporan HTML:**
-```bash
-python check_google_accounts.py --html laporan.html
-```
-
-**Cek file CSV berbeda:**
-```bash
-python check_google_accounts.py --csv data_mhs_baru.csv --output laporan_baru.csv
-```
-
-## 📊 Status yang Mungkin Muncul
-
-| Status | Icon | Arti |
-|--------|------|------|
-| `berhasil` | [OK] | Login berhasil - password masih default (belum diubah) |
-| `verifikasi` | [!] | Google minta verifikasi - password SUDAH diganti (akun aman) |
-| `gagal` | [X] | Password salah atau email tidak ditemukan |
-| `timeout` | [T] | Halaman tidak merespons dalam 30 detik |
-| `error` | [E] | Error lainnya |
-| `unknown` | [?] | Status tidak diketahui - perlu cek manual |
-
-## 📋 Output
-
-### 1. CSV (hasil_cek.csv)
-Kolom: `nim, nama, email, status, keterangan, timestamp`
-
-### 2. HTML (hasil_cek.html) - jika pakai `--html`
-Laporan visual dengan tabel berwarna dan ringkasan statistik.
-
-## ⚠️ Tips Penting
-
-1. **Jangan cek terlalu cepat**: Google bisa blok jika login terlalu sering dalam waktu singkat. Gunakan `--delay 5` atau lebih.
-2. **Mode headless**: Lebih cepat tapi Google lebih mudah deteksi bot. Jika ada masalah, jangan pakai `--headless`.
-3. **Hasil tersimpan otomatis**: Setiap selesai cek 1 akun, hasil langsung disimpan ke CSV. Jika script dihentikan di tengah, hasil yang sudah dicek tetap tersimpan.
-4. **Password default**: Jika password mahasiswa sudah diganti, login akan gagal/verifikasi = berarti akun sudah aman.
-
-## 🔄 Update Data Mahasiswa
-
-Untuk cek mahasiswa baru:
-1. Edit `students.csv` - tambah baris baru dengan data mahasiswa
-2. Jalankan ulang script
-
-## ❓ Troubleshooting
-
-**Error: "Playwright belum terinstall"**
-```bash
-pip install playwright
-playwright install chromium
-```
-
-**Error: "Browser tidak bisa launch"**
-- Jangan pakai `--headless` (gunakan mode GUI)
-- Atau coba: `playwright install --with-deps chromium`
-
-**Semua akun status "unknown"**
-- Google mungkin mengubah tampilan login. Buka browser secara manual ke `accounts.google.com/signin` dan cek struktur halaman terbaru.
-- Atau coba tanpa `--headless` untuk lihat apa yang terjadi.
-
-**Login selalu gagal padahal email benar**
-- Cek format email: `namabelakang.nim@student.unud.ac.id`
-- Pastikan nama belakang dieja dengan benar (tanpa spasi di akhir)
-- Coba login manual untuk 1 akun sebagai pembanding
+- Human-like typing (delay random 50-150ms per karakter)
+- Auto-handle "Choose an account" page (retry 5x + fallback)
+- Auto-detect akun masih login → navigate ke accountchooser
+- Auto-retry tab creation + session renew
+- Deteksi lengkap: verifikasi HP/SMS/OTP, password salah, something wrong
+- Beep + pause saat login berhasil
+- Laporan CSV + HTML

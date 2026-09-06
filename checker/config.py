@@ -60,6 +60,15 @@ SOMETHING_WRONG_SIGNALS = [
     "unusual activity", "couldn't complete",
 ]
 
+# Deteksi email ditolak Google (rejected = email tidak terdaftar/diblokir)
+# URL berisi /signin/rejected atau teks ini muncul
+REJECTED_URL_SIGNAL = "/signin/rejected"
+REJECTED_TEXT_SIGNALS = [
+    "this email address isn't associated",
+    "email tidak terdaftar",
+    "your email address has been blocked",
+]
+
 # Deteksi login berhasil
 SUCCESS_SIGNALS = [
     "favorit", "beranda", "info pribadi", "keamanan & login",

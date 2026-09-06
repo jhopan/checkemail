@@ -16,6 +16,7 @@ from .config import (
     CHOOSE_ACCOUNT_SIGNALS, MYACCOUNT_SIGNALS,
     VERIFY_SIGNALS, EMAIL_ERROR_SIGNALS,
     WRONG_PWD_SIGNALS, SOMETHING_WRONG_SIGNALS, SUCCESS_SIGNALS,
+    REJECTED_URL_SIGNAL, REJECTED_TEXT_SIGNALS,
 )
 
 ACCOUNTCHOOSER_URL = (
@@ -146,10 +147,16 @@ def check_account(client, email, password):
         client.wait(5)
 
         found_pwd = found_verify = found_error = False
+        found_rejected = False
         for retry in range(15):
             snapshot, url = client.get_full_snapshot()
             sl = snapshot.lower()
 
+            # Email ditolak Google (rejected URL / teks)
+            if REJECTED_URL_SIGNAL in url.lower() or _any_signal(sl, REJECTED_TEXT_SIGNALS):
+                found_rejected = True
+                log(f"  Email ditolak Google! (retry {retry+1})")
+                break
             if "enter your password" in sl or "masukkan sandi" in sl:
                 found_pwd = True
                 log(f"  Halaman password ditemukan! (retry {retry+1})")
@@ -171,6 +178,11 @@ def check_account(client, email, password):
                 log(f"  Something wrong terdeteksi! (retry {retry+1})")
                 break
             client.wait(2)
+
+        if found_rejected:
+            result["status"] = "gagal"
+            result["keterangan"] = "Email ditolak Google (tidak terdaftar/diblokir)"
+            return result
 
         if found_error:
             result["status"] = "gagal"

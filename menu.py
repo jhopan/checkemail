@@ -12,7 +12,12 @@ import json
 import webbrowser
 import subprocess
 
-from checker import DEFAULT_PASSWORD, DEFAULT_SERVER_URL, DELAY_BETWEEN_ACCOUNTS
+from checker import (
+    CamofoxClient,
+    DEFAULT_PASSWORD,
+    DEFAULT_SERVER_URL,
+    DELAY_BETWEEN_ACCOUNTS,
+)
 
 CONFIG_FILE = "config.json"
 

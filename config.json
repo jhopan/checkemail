@@ -1,0 +1,13 @@
+{
+  "password": "unud2023",
+  "server_url": "http://localhost:9377",
+  "csv_file": "accounts.csv",
+  "output_file": "hasil_cek.csv",
+  "html_file": "hasil_cek.html",
+  "delay": 3,
+  "fresh": false,
+  "pause": true,
+  "append": false,
+  "html": true,
+  "yes": true
+}

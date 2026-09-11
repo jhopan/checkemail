@@ -10,3 +10,4 @@ test_hasil*.html
 test2.csv
 students.csv
 students_baru.csv
+checker/ menu.py check.py config.json gmail_accounts.csv unud_accounts.csv

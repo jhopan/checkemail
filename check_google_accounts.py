@@ -707,6 +707,39 @@ def read_students(csv_path):
     return students
 
 
+def read_accounts_direct(csv_path, default_password):
+    """
+    Baca akun LOGIN BIASA dari CSV.
+    Format per baris:
+      email,password   <- password spesifik per akun
+      email            <- pakai password default (--password)
+    Contoh:
+      budi@gmail.com,pwd123
+      siti@yahoo.com
+    """
+    accounts = []
+    with open(csv_path, 'r', encoding='utf-8-sig') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            if line.lower().startswith('email,'):
+                continue
+            if ',' in line:
+                email, pwd = line.split(',', 1)
+                pwd = pwd.strip()
+            else:
+                email, pwd = line, ''
+            email = email.strip()
+            if not email or '@' not in email:
+                continue
+            accounts.append({
+                'nim': '', 'nama': '', 'email': email,
+                'password': pwd or default_password,
+            })
+    return accounts
+
+
 # ============================================================
 # FUNGSI LAPORAN
 # ============================================================
@@ -755,7 +788,9 @@ def generate_report(results, output_path, append=False):
     print(f"{'No':>3} | {'NIM':<15} | {'Nama':<30} | {'Email':<45} | {'Status':<12}")
     print("-" * 95)
     for i, r in enumerate(results, 1):
-        print(f"{i:>3} | {r['nim']:<15} | {r['nama'][:30]:<30} | {r['email'][:45]:<45} | {r['status']:<12}")
+        nim = r.get('nim', '') or '-'
+        nama = (r.get('nama', '') or '-')[:30]
+        print(f"{i:>3} | {nim:<15} | {nama:<30} | {r['email'][:45]:<45} | {r['status']:<12}")
     print("-" * 95)
 
 
@@ -776,11 +811,13 @@ def generate_html_report(results, html_path):
     rows_html = ""
     for i, r in enumerate(results, 1):
         icon, color = icon_map.get(r['status'], ('?', '#6b7280'))
+        nim = r.get('nim', '') or '-'
+        nama = r.get('nama', '') or '-'
         rows_html += f"""
         <tr>
             <td style="text-align:center">{i}</td>
-            <td><code>{r['nim']}</code></td>
-            <td>{r['nama']}</td>
+            <td><code>{nim}</code></td>
+            <td>{nama}</td>
             <td><code style="font-size:12px">{r['email']}</code></td>
             <td style="text-align:center"><span style="background:{color};color:white;padding:2px 8px;border-radius:4px;font-weight:bold;font-size:11px">{icon}</span> {r['status']}</td>
             <td>{r['keterangan']}</td>
@@ -851,13 +888,20 @@ Contoh penggunaan:
   python check_google_accounts.py --csv students_baru.csv --yes
   python check_google_accounts.py --delay 5 --yes
 
+  LOGIN BIASA (email,password):
+  python check_google_accounts.py --mode direct --csv akun.csv --yes
+  python check_google_accounts.py --mode direct --csv akun.csv --password pwd123 --yes
+
 PRASYARAT:
   1. Server Camofox harus jalan: cd camofox-browser && npm start
-  2. File CSV dengan format: NIM,Nama (1 kolom, dipisah koma)
+  2. Mode unud  : CSV format NIM,Nama
+     Mode direct: CSV format email,password (password boleh kosong)
         """,
     )
     parser.add_argument('--csv', default='students.csv',
-                        help='Path file CSV data mahasiswa (default: students.csv)')
+                        help='Path file CSV sumber (default: students.csv)')
+    parser.add_argument('--mode', default='unud', choices=['unud', 'direct'],
+                        help="Mode baca CSV: 'unud' (nim,nama -> email auto) atau 'direct' (email,password) (default: unud)")
     parser.add_argument('--output', default='hasil_cek.csv',
                         help='Path file output laporan CSV (default: hasil_cek.csv)')
     parser.add_argument('--html', default=None,
@@ -881,17 +925,27 @@ PRASYARAT:
     # ── Validasi file CSV ──
     if not os.path.exists(args.csv):
         print(f"File tidak ditemukan: {args.csv}")
-        print("\nBuat file dengan format 1 kolom, tiap baris = NIM,Nama:")
-        print("\nContoh isi file:")
-        print("  2305541113,Gede Davananda Wicaksana")
-        print("  2305541114,Alghifari Kurnia Assyauqillah")
-        print("\nBisa pakai koma (,) atau titik koma (;)")
+        if args.mode == 'unud':
+            print("\nBuat file dengan format 1 kolom, tiap baris = NIM,Nama:")
+            print("\nContoh isi file:")
+            print("  2305541113,Gede Davananda Wicaksana")
+            print("  2305541114,Alghifari Kurnia Assyauqillah")
+            print("\nBisa pakai koma (,) atau titik koma (;;)")
+        else:
+            print("\nBuat file dengan format tiap baris = email,password")
+            print("(password opsional - kosong = pakai --password)")
+            print("\nContoh isi file:")
+            print("  budi@gmail.com,pwd123")
+            print("  siti@yahoo.com")
         return
 
-    # ── Baca data mahasiswa ──
-    students = read_students(args.csv)
-    if not students:
-        print("Tidak ada data mahasiswa di file CSV. Pastikan format kolom benar.")
+    # ── Baca data sesuai mode ──
+    if args.mode == 'unud':
+        accounts = read_students(args.csv)
+    else:
+        accounts = read_accounts_direct(args.csv, args.password)
+    if not accounts:
+        print("Tidak ada akun di file CSV. Pastikan format kolom benar.")
         return
 
     print("=" * 70)
@@ -899,9 +953,10 @@ PRASYARAT:
     print("          Powered by Camoufox HTTP API")
     print("=" * 70)
     print(f"  File CSV        : {os.path.abspath(args.csv)}")
+    print(f"  Mode CSV        : {'UNUD (nim,nama -> email auto)' if args.mode == 'unud' else 'LOGIN BIASA (email,password)'}")
     print(f"  File output     : {os.path.abspath(args.output)}")
     print(f"  Password default: {args.password}")
-    print(f"  Total akun      : {len(students)}")
+    print(f"  Total akun      : {len(accounts)}")
     print(f"  Delay antar akun: {args.delay} detik")
     print(f"  Server Camofox  : {args.server_url}")
     print(f"  Mode output     : {'APPEND (tambah data)' if args.append else 'OVERWRITE (ganti data)'}")
@@ -950,13 +1005,14 @@ PRASYARAT:
     # ── Preview daftar akun ──
     print("\nDaftar akun yang akan dicek:")
     print("-" * 70)
-    for i, s in enumerate(students, 1):
-        print(f"  {i:>3}. {s['nim']} | {s['nama'][:35]:<35} | {s['email']}")
+    for i, s in enumerate(accounts, 1):
+        ident = f"{s['nim']} | {s['nama'][:35]:<35}" if s.get('nim') else "(login biasa)"
+        print(f"  {i:>3}. {ident} | {s['email']}")
     print("-" * 70)
 
     # ── Konfirmasi ──
     if not args.yes:
-        print(f"\nAkan mengecek {len(students)} akun. Tekan Enter untuk mulai (Ctrl+C untuk batal)...")
+        print(f"\nAkan mengecek {len(accounts)} akun. Tekan Enter untuk mulai (Ctrl+C untuk batal)...")
         try:
             input()
         except KeyboardInterrupt:
@@ -966,9 +1022,10 @@ PRASYARAT:
     results = []
 
     # ── Loop cek tiap akun ──
-    for i, student in enumerate(students, 1):
-        print(f"\n[{i}/{len(students)}] Mengecek: {student['nim']} - {student['nama'][:35]}")
-        print(f"  Email: {student['email']}")
+    for i, account in enumerate(accounts, 1):
+        label = f"{account['nim']} - {account['nama'][:35]}" if account.get('nim') else "login biasa"
+        print(f"\n[{i}/{len(accounts)}] Mengecek: {label}")
+        print(f"  Email: {account['email']}")
 
         # Mode fresh: tutup tab lama + hapus cookies sebelum tiap akun
         if args.fresh and i > 1:
@@ -979,9 +1036,11 @@ PRASYARAT:
             except:
                 pass
 
-        result = check_account(client, student['email'], args.password)
-        result['nim'] = student['nim']
-        result['nama'] = student['nama']
+        # Password: akun direct punya password sendiri, unud pakai default
+        pwd = account.get('password') or args.password
+        result = check_account(client, account['email'], pwd)
+        result['nim'] = account.get('nim', '')
+        result['nama'] = account.get('nama', '')
 
         icon = {
             'berhasil': '[OK]', 'verifikasi': '[!]',
@@ -1019,7 +1078,7 @@ PRASYARAT:
                     break
 
         # Delay
-        if i < len(students):
+        if i < len(accounts):
             client.wait(args.delay)
 
     # ── Cleanup ──

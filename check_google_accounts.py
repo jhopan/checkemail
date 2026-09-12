@@ -1129,6 +1129,17 @@ def menu():
         print(f"❌ File tidak ditemukan: {csv_file}")
         return
 
+    # Password default - baca dari config.json kalau ada (yang kamu ganti di menu.py),
+    # kalau tidak ada tanya. Enter = pakai yang tersimpan.
+    saved_password = DEFAULT_PASSWORD
+    if os.path.exists("config.json"):
+        try:
+            with open("config.json", 'r') as f:
+                saved_password = json.load(f).get("password") or DEFAULT_PASSWORD
+        except Exception:
+            pass
+    password = input(f"Password default [{saved_password}]: ").strip() or saved_password
+
     # ── Cek server Camofox SEKALIGUS di sini (seperti versi awal) ──
     print("\nMengecek server Camofox...")
     client = CamofoxClient(DEFAULT_SERVER_URL)
@@ -1175,6 +1186,7 @@ def menu():
         "--mode", mode,
         "--csv", csv_file,
         "--output", "hasil_cek.csv",
+        "--password", password,
         "--yes",          # konfirmasi sudah lewat di atas
         "--pause",        # beep + tunggu Enter saat berhasil
     ]

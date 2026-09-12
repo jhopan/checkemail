@@ -1098,5 +1098,94 @@ PRASYARAT:
     print(f"Laporan CSV: {os.path.abspath(args.output)}")
 
 
-if __name__ == '__main__':
+def menu():
+    """Menu interaktif - pilih mode & file tanpa hafal flags.
+    Jalan via server Camofox HTTP API (satu arsitektur, tanpa duplikat)."""
+    print("=" * 70)
+    print("     GOOGLE ACCOUNT CHECKER - MENU")
+    print("     Powered by Camofox HTTP API (localhost:9377)")
+    print("=" * 70)
+    print("  1. Cek akun UNUD        (csv: nim,nama -> email auto)")
+    print("  2. Cek akun LOGIN BIASA (csv: email,password)")
+    print("  0. Keluar")
+    print("=" * 70)
+    pilih = input("Pilih menu: ").strip()
+
+    if pilih == "0":
+        return
+
+    # Tanya file CSV sumber
+    if pilih == "1":
+        default_csv = "students.csv"
+    elif pilih == "2":
+        default_csv = "gmail_accounts.csv"
+    else:
+        print("Pilihan tidak dikenal.")
+        return
+
+    csv_file = input(f"File CSV sumber [{default_csv}]: ").strip() or default_csv
+    if not os.path.exists(csv_file):
+        print(f"❌ File tidak ditemukan: {csv_file}")
+        return
+
+    # ── Cek server Camofox SEKALIGUS di sini (seperti versi awal) ──
+    print("\nMengecek server Camofox...")
+    client = CamofoxClient(DEFAULT_SERVER_URL)
+    if not client.check_server():
+        print(f"\n❌ Server Camofox tidak berjalan di {DEFAULT_SERVER_URL}")
+        print("\nCara menjalankan:")
+        print("  1. Buka terminal baru")
+        print("  2. cd C:\\Users\\ACER\\camofox-browser")
+        print("  3. npm start")
+        print("\nPastikan muncul: \"server started\" dan \"browserConnected\": true")
+        return
+    print("  ✅ Server Camofox berjalan - browser connected!")
+
+    # ── Baca akun sesuai mode (pakai loader yang sama dengan CLI) ──
+    if pilih == "1":
+        accounts = read_students(csv_file)
+    else:
+        accounts = read_accounts_direct(csv_file, DEFAULT_PASSWORD)
+    if not accounts:
+        print("Tidak ada akun di file CSV. Pastikan format kolom benar.")
+        return
+
+    # ── Preview daftar akun ──
+    print("\nDaftar akun yang akan dicek:")
+    print("-" * 70)
+    for i, s in enumerate(accounts, 1):
+        ident = f"{s['nim']} | {s['nama'][:30]:<30}" if s.get('nim') else "(login biasa)"
+        print(f"  {i:>3}. {ident} | {s['email']}")
+    print("-" * 70)
+
+    # ── Konfirmasi ──
+    print(f"\nAkan mengecek {len(accounts)} akun. Tekan Enter untuk mulai (Ctrl+C untuk batal)...")
+    try:
+        input()
+    except KeyboardInterrupt:
+        print("\nDibatalkan.")
+        return
+
+    # ── Jalankan pakai JALUR YANG SAMA dengan main() ──
+    # Susun sys.argv lalu panggil main() - satu kode, tanpa duplikat engine
+    mode = "unud" if pilih == "1" else "direct"
+    sys.argv = [
+        "check_google_accounts.py",
+        "--mode", mode,
+        "--csv", csv_file,
+        "--output", "hasil_cek.csv",
+        "--yes",          # konfirmasi sudah lewat di atas
+        "--pause",        # beep + tunggu Enter saat berhasil
+    ]
     main()
+
+
+if __name__ == '__main__':
+    # Tanpa argumen = menu interaktif. Dengan argumen = CLI langsung.
+    if len(sys.argv) > 1:
+        main()
+    else:
+        try:
+            menu()
+        except KeyboardInterrupt:
+            print("\nDibatalkan.")

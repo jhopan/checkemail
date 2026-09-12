@@ -205,46 +205,40 @@ class CamofoxClient:
             return {"error": "evaluate failed"}
 
     def type_text_js(self, selector, text):
-        """Ketik teks via JavaScript dengan native setter + delay per karakter (simulasi human typing)"""
-        chars_js = ",".join([repr(c) for c in text])
-        js = f"""
-        (async () => {{
-            const el = document.querySelector('{selector}');
-            if (!el) return 'not found';
-            el.focus();
-            const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-            const chars = [{chars_js}];
-            let current = '';
-            for (const ch of chars) {{
-                current += ch;
-                nativeSetter.call(el, current);
-                el.dispatchEvent(new Event('input', {{bubbles: true}}));
-                el.dispatchEvent(new Event('change', {{bubbles: true}}));
-                await new Promise(r => setTimeout(r, 50 + Math.random() * 100));
-            }}
-            return 'typed ' + chars.length + ' chars, final: ' + el.value.length;
-        }})()
+        """Ketik via HTTP type endpoint (Playwright native, mode keyboard).
+
+        mode=keyboard = ketik per karakter dgn delay (human-like) =
+        trusted keystrokes. JANGAN pakai JS setter - Google bisa bedakan.
         """
-        return self.evaluate(js)
+        data = {
+            "userId": self.user_id,
+            "selector": selector,
+            "text": text,
+            "mode": "keyboard",
+            "delay": 60,
+        }
+        try:
+            return self._post(f"/tabs/{self.tab_id}/type", data, timeout=90)
+        except requests.exceptions.Timeout:
+            return {"ok": True, "note": "type sent (timeout, likely done)"}
+        except Exception as e:
+            return {"error": str(e)}
 
     def click_js(self, selector):
-        """Klik element via JavaScript dengan PointerEvent + mouse events lengkap"""
-        js = f"""
-        (() => {{
-            const el = document.querySelector('{selector}');
-            if (!el) return 'not found';
-            const btn = el.querySelector('button') || el;
-            // PointerEvent (Google butuh ini untuk bekerja)
-            btn.dispatchEvent(new PointerEvent('pointerdown', {{bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse'}}));
-            btn.dispatchEvent(new PointerEvent('pointerup', {{bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse'}}));
-            // Mouse events
-            btn.dispatchEvent(new MouseEvent('mousedown', {{bubbles: true, cancelable: true}}));
-            btn.dispatchEvent(new MouseEvent('mouseup', {{bubbles: true, cancelable: true}}));
-            btn.dispatchEvent(new MouseEvent('click', {{bubbles: true, cancelable: true}}));
-            return 'clicked';
-        }})()
+        """Klik element via HTTP click Playwright native (TRUSTED event).
+
+        JANGAN pakai JS click (dispatchEvent/click()) - Google deteksi
+        isTrusted=false dan tolak dengan 'This browser may not be secure'.
+        Endpoint /click dengan selector = Playwright native = trusted.
+        Timeout di-ignore karena klik sering berhasil walau response timeout.
         """
-        return self.evaluate(js)
+        data = {"userId": self.user_id, "selector": selector}
+        try:
+            return self._post(f"/tabs/{self.tab_id}/click", data, timeout=45)
+        except requests.exceptions.Timeout:
+            return {"ok": True, "note": "click sent (timeout, likely navigated)"}
+        except Exception as e:
+            return {"error": str(e)}
 
     def navigate(self, url):
         """Navigasi ke URL"""
@@ -492,6 +486,13 @@ def check_account(client, email, password=DEFAULT_PASSWORD):
         for retry in range(max_retries):
             snapshot, url = client.get_full_snapshot()
             snapshot_lower = snapshot.lower()
+
+            # Email DITOLAK Google (/signin/rejected = tidak terdaftar / diblokir)
+            if "/signin/rejected" in url.lower():
+                result["status"] = "gagal"
+                result["keterangan"] = "Email ditolak Google (tidak terdaftar / diblokir)"
+                log(f"  Email ditolak Google! (retry {retry+1})")
+                return result
 
             if "enter your password" in snapshot_lower or "masukkan sandi" in snapshot_lower:
                 found_password_page = True
